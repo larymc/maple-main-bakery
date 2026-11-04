@@ -157,7 +157,7 @@
     </div>
   </section>
 
-  <!-- Booking form — contains Intentional Demo Bug #1 (see README) -->
+  <!-- Booking form -->
   <section id="booking" class="border-t border-[#2B1D14]/10 bg-[#FFFDF8]">
     <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20">
       <h2 class="font-display text-4xl font-bold">Book a Table / Pre-Order</h2>
@@ -198,6 +198,8 @@
         </div>
       </form>
 
+      <div id="bookingConfirmation" hidden tabindex="-1" role="status" aria-live="polite" class="mt-6 rounded-xl bg-green-50 p-5 ring-1 ring-green-200"></div>
+
       <!-- Feature Gap #2 (intentional, for Relais demo): no automated confirmation yet -->
       <aside class="mt-8 rounded-lg bg-amber-50 px-4 py-3.5 text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200">
         <strong>Please note:</strong> bookings currently go straight to our store sheet. We don't yet send an automated email or SMS confirmation with your booking date, time, and reference number — Sarah confirms each booking personally for now.
@@ -230,35 +232,62 @@ toggle.addEventListener("click", () => {
   else { document.body.insertBefore(shell, document.body.firstChild); document.body.appendChild(page); }
 });
 
-// ── Booking submit — INTENTIONAL DEMO BUG #1 ─────────────────────────────────
-// BUG (intentional, do not "fix" without filing via Relais): submitBooking()
-// reads response.confirmationEmail, but the store-sheet endpoint returns no
-// such field. The promise never resolves, no confirmation is shown, and the
-// button spins forever. Sarah reports this in the Relais WhatsApp demo.
+// ── Booking submit (fixed) ───────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 function submitBooking(formData) {
-  return new Promise(() => {
-    // Simulated POST to the store-sheet endpoint… which hangs / errors.
+  return new Promise((resolve) => {
+    // Simulated POST to the store-sheet endpoint (demo-safe, no network).
     setTimeout(() => {
-      const response = undefined; // endpoint returned no JSON body
-      // Next line throws in the real codebase narrative (booking.js:42):
-      console.error("Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'confirmationEmail') at submitBooking (booking.js:42)");
-      void response.confirmationEmail;
+      const date = (formData.get("date") || "").toString();
+      const time = (formData.get("time") || "").toString();
+      const name = (formData.get("name") || "").toString().trim();
+      const referenceNumber = "MM-" + Date.now().toString(36).toUpperCase().slice(-6) + "-" + Math.floor(10 + Math.random() * 90);
+      resolve({ date, time, name, referenceNumber });
     }, 900);
-    // NOTE: resolve() is never called — intentional infinite-spinner bug.
   });
 }
 
 document.getElementById("bookingForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const form = e.target;
   const btn = document.getElementById("submitBtn");
   const hint = document.getElementById("bookingHint");
+  const confirmationBox = document.getElementById("bookingConfirmation");
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Submitting booking...';
   hint.textContent = "Sending your booking to the bakery…";
-  console.warn("[Maple & Main] submitBooking: waiting on store-sheet endpoint…");
-  await submitBooking(new FormData(e.target)); // never resolves (intentional bug)
+  try {
+    const confirmation = await submitBooking(new FormData(form));
+    btn.disabled = false;
+    btn.textContent = "Submit Booking";
+    hint.textContent = "No payment taken online — we hold your table for 15 minutes past booking time.";
+    const safeName = escapeHtml(confirmation.name || "there");
+    const safeDate = escapeHtml(confirmation.date || "—");
+    const safeTime = escapeHtml(confirmation.time || "—");
+    const safeRef = escapeHtml(confirmation.referenceNumber);
+    confirmationBox.hidden = false;
+    confirmationBox.innerHTML = '<h3 class="font-display text-xl font-bold text-green-900">Booking confirmed — thanks, ' + safeName + '!</h3>'
+      + '<p class="mt-2 text-[15px] text-green-900">Your request has been received. This is an on-page preview only — no email or SMS was sent.</p>'
+      + '<dl class="mt-4 grid gap-3 text-[15px] text-green-900 sm:grid-cols-3">'
+      + '<div><dt class="text-xs font-bold uppercase tracking-wider">Date</dt><dd class="mt-0.5 font-bold">' + safeDate + '</dd></div>'
+      + '<div><dt class="text-xs font-bold uppercase tracking-wider">Time</dt><dd class="mt-0.5 font-bold">' + safeTime + '</dd></div>'
+      + '<div><dt class="text-xs font-bold uppercase tracking-wider">Reference #</dt><dd class="mt-0.5 font-bold">' + safeRef + '</dd></div>'
+      + '</dl>';
+    confirmationBox.focus({ preventScroll: true });
+    confirmationBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (err) {
+    console.error("[Maple & Main] booking failed", err);
+    btn.disabled = false;
+    btn.textContent = "Submit Booking";
+    hint.textContent = "Something went wrong sending your booking. Please try again.";
+  }
 });
 </script>
 </body>
 </html>
-
