@@ -1,0 +1,14 @@
+{
+  "name": "maple-main-bakery",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Maple & Main Bakery \u2014 fictional client site for the Relais hackathon demo (larymc/maple-main-bakery)",
+  "scripts": {
+    "dev": "serve . -l 8080",
+    "start": "serve . -l 8080",
+    "muse:fix": "node .github/scripts/muse-fix.mjs"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}
