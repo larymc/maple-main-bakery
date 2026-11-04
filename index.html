@@ -230,35 +230,53 @@ toggle.addEventListener("click", () => {
   else { document.body.insertBefore(shell, document.body.firstChild); document.body.appendChild(page); }
 });
 
-// ── Booking submit — INTENTIONAL DEMO BUG #1 ─────────────────────────────────
-// BUG (intentional, do not "fix" without filing via Relais): submitBooking()
-// reads response.confirmationEmail, but the store-sheet endpoint returns no
-// such field. The promise never resolves, no confirmation is shown, and the
-// button spins forever. Sarah reports this in the Relais WhatsApp demo.
+// ── Booking submit ───────────────────────────────────────────────────────────
 function submitBooking(formData) {
-  return new Promise(() => {
-    // Simulated POST to the store-sheet endpoint… which hangs / errors.
+  return new Promise((resolve) => {
+    // Simulated POST to the store-sheet endpoint.
     setTimeout(() => {
-      const response = undefined; // endpoint returned no JSON body
-      // Next line throws in the real codebase narrative (booking.js:42):
-      console.error("Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'confirmationEmail') at submitBooking (booking.js:42)");
-      void response.confirmationEmail;
+      const data = Object.fromEntries(formData.entries());
+      resolve({
+        ok: true,
+        reference: "MM-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
+        confirmationEmail: data.email || "",
+        name: data.name || "",
+        date: data.date || "",
+        time: data.time || ""
+      });
     }, 900);
-    // NOTE: resolve() is never called — intentional infinite-spinner bug.
   });
 }
 
 document.getElementById("bookingForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const form = e.target;
   const btn = document.getElementById("submitBtn");
   const hint = document.getElementById("bookingHint");
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+  const originalBtnText = "Submit Booking";
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Submitting booking...';
   hint.textContent = "Sending your booking to the bakery…";
-  console.warn("[Maple & Main] submitBooking: waiting on store-sheet endpoint…");
-  await submitBooking(new FormData(e.target)); // never resolves (intentional bug)
+  try {
+    const details = Object.fromEntries(new FormData(form).entries());
+    const confirmation = await submitBooking(new FormData(form));
+    btn.disabled = false;
+    btn.textContent = "✓ Booking Received — Thank You!";
+    const when = [confirmation.date || details.date, confirmation.time || details.time].filter(Boolean).join(" at ");
+    const ref = confirmation.reference ? " Reference " + confirmation.reference + "." : "";
+    hint.textContent = "Thanks " + (details.name || "friend") + (when ? " — we have your request for " + when + "." : " — we received your booking.") + ref + " We usually reply within the hour during opening hours.";
+    form.reset();
+  } catch (err) {
+    console.error("[Maple & Main] booking failed:", err);
+    btn.disabled = false;
+    btn.textContent = originalBtnText;
+    hint.textContent = "Sorry — something went wrong sending your booking. Please try again or call us at (403) 555-0142.";
+  }
 });
 </script>
 </body>
 </html>
-
