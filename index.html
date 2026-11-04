@@ -194,7 +194,7 @@
           <button id="submitBtn" type="submit" class="w-full rounded-full bg-[#C77414] px-6 py-4 text-[16px] font-bold text-white shadow-md transition hover:bg-[#9A5A0E] disabled:cursor-wait disabled:opacity-80 sm:w-auto sm:px-10">
             Submit Booking
           </button>
-          <p id="bookingHint" class="mt-3 text-sm text-[#5C4630]">No payment taken online — we hold your table for 15 minutes past booking time.</p>
+          <p id="bookingHint" class="mt-3 text-sm text-[#5C4630]" role="status" aria-live="polite">No payment taken online — we hold your table for 15 minutes past booking time.</p>
         </div>
       </form>
 
@@ -230,35 +230,48 @@ toggle.addEventListener("click", () => {
   else { document.body.insertBefore(shell, document.body.firstChild); document.body.appendChild(page); }
 });
 
-// ── Booking submit — INTENTIONAL DEMO BUG #1 ─────────────────────────────────
-// BUG (intentional, do not "fix" without filing via Relais): submitBooking()
-// reads response.confirmationEmail, but the store-sheet endpoint returns no
-// such field. The promise never resolves, no confirmation is shown, and the
-// button spins forever. Sarah reports this in the Relais WhatsApp demo.
+// ── Booking submit ───────────────────────────────────────────────────────────
 function submitBooking(formData) {
-  return new Promise(() => {
-    // Simulated POST to the store-sheet endpoint… which hangs / errors.
+  return new Promise((resolve) => {
     setTimeout(() => {
-      const response = undefined; // endpoint returned no JSON body
-      // Next line throws in the real codebase narrative (booking.js:42):
-      console.error("Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'confirmationEmail') at submitBooking (booking.js:42)");
-      void response.confirmationEmail;
+      const reference = "MM-" + Math.random().toString(36).slice(2, 7).toUpperCase();
+      resolve({
+        confirmationEmail: formData.get("email") || "",
+        name: formData.get("name") || "",
+        date: formData.get("date") || "",
+        time: formData.get("time") || "",
+        reference: reference
+      });
     }, 900);
-    // NOTE: resolve() is never called — intentional infinite-spinner bug.
   });
 }
 
 document.getElementById("bookingForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const form = e.target;
   const btn = document.getElementById("submitBtn");
   const hint = document.getElementById("bookingHint");
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+  const originalBtnText = "Submit Booking";
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Submitting booking...';
   hint.textContent = "Sending your booking to the bakery…";
-  console.warn("[Maple & Main] submitBooking: waiting on store-sheet endpoint…");
-  await submitBooking(new FormData(e.target)); // never resolves (intentional bug)
+  try {
+    const confirmation = await submitBooking(new FormData(form));
+    btn.disabled = false;
+    btn.textContent = "Submit Another Booking";
+    hint.textContent = "Thanks " + (confirmation.name || "friend") + "! Your booking for " + (confirmation.date || "your date") + " at " + (confirmation.time || "your time") + " is received" + (confirmation.reference ? " (ref " + confirmation.reference + ")" : "") + ". Confirmation sent to " + (confirmation.confirmationEmail || "your email") + ".";
+    form.reset();
+  } catch (err) {
+    console.error("[Maple & Main] booking failed", err);
+    btn.disabled = false;
+    btn.textContent = originalBtnText;
+    hint.textContent = "Sorry, something went wrong sending your booking. Please try again or call us at (403) 555-0142.";
+  }
 });
 </script>
 </body>
 </html>
-
